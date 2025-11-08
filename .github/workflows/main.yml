@@ -1,0 +1,69 @@
+name: Deploy to Linux Server for testing
+
+on:
+  push:
+    branches:
+      - main  # Deploy when code is pushed to the `main` branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Add .env file
+        run: |
+         echo "${{ secrets.ENV_FILE }}" > .env
+
+      # Add the firebase_key.json file
+      #- name: Add firebase_key_live.json file
+       # run: |
+         # echo "${{ secrets.FIREBASE_FILE_CONTENT }}" | base64 --decode > firebase_key.json  
+
+      
+      
+      
+
+      # Set up Docker Buildx (if multi-platform builds are needed)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Log in to DockerHub
+      - name: Log in to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      # Build the Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t ajithantony/test:v3.0 .
+
+      # Push the Docker image to DockerHub
+      - name: Push Docker image
+        run: |
+          docker push ajithantony/test:v3.0
+
+      # Deploy to the Linux server
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          password: ${{ secrets.SERVER_PASSWORD }} 
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}          
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            # Pull the latest Docker image
+            docker pull ajithantony/test:v3.0
+            
+            # Stop and remove the existing container (if any)
+            docker stop test3|| true
+            docker rm test3|| true
+            
+            # Run the container with the new image
+            docker run  -d -p 9000:9000 --name test3 --restart always ajithantony/test:v3.0
+            docker image prune -a -f
